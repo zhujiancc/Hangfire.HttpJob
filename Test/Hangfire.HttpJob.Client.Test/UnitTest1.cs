@@ -90,7 +90,7 @@ namespace Hangfire.HttpJob.Client.Test
             {
                 BasicUserName = "admin",
                 BasicPassword = "test"
-            });
+            }).Result;
             Assert.IsTrue(result.IsSuccess);
         }
 

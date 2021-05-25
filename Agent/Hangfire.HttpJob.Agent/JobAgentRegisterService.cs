@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace Hangfire.HttpJob.Agent
 {
-    class JobAgentRegisterService: IHostedService, IDisposable
+    class JobAgentRegisterService : IHostedService, IDisposable
     {
         private readonly JobAgentOptions _options;
         private readonly ILogger _logger;
@@ -49,12 +49,12 @@ namespace Hangfire.HttpJob.Agent
 
             _timer = new System.Threading.Timer(DoRegister, null, 1000 * 5, 1000 * 5);
 #if NETCORE
-//owin的话启动慢
+            //owin的话启动慢
             DoRegister(null);
 #endif
             return Task.CompletedTask;
         }
-      
+
         public Task StopAsync(CancellationToken cancellationToken)
         {
             try
@@ -65,7 +65,7 @@ namespace Hangfire.HttpJob.Agent
             {
                 //ignore
             }
-          
+
             return Task.CompletedTask;
         }
 
@@ -83,10 +83,10 @@ namespace Hangfire.HttpJob.Agent
                 foreach (var jobMetaData in JobAgentServiceConfigurer.JobAgentDic)
                 {
                     //如果自己硬要不注册 就不去注册
-                    if(jobMetaData.Value.EnableAutoRegister!=null && !jobMetaData.Value.EnableAutoRegister.Value ) continue;
+                    if (jobMetaData.Value.EnableAutoRegister != null && !jobMetaData.Value.EnableAutoRegister.Value) continue;
 
                     //已经注册过了
-                    if(jobMetaData.Value.AutoRegisterResult) continue;
+                    if (jobMetaData.Value.AutoRegisterResult) continue;
 
                     var jobId = jobMetaData.Value.RegisterId;
                     if (string.IsNullOrEmpty(jobId))
@@ -103,35 +103,35 @@ namespace Hangfire.HttpJob.Agent
                     //得设置如果存在就不能加了
 
                     var url = ((_options.RegisterAgentHost) + "/" + _options.SitemapUrl);
-                    var urlArr = url.Split(new string[] {"://"}, StringSplitOptions.None);
-                    
+                    var urlArr = url.Split(new string[] { "://" }, StringSplitOptions.None);
+
                     var result = HangfireJobClient.AddRecurringJob(_options.RegisterHangfireUrl, new RecurringJob
-                        {
-                            Url = urlArr[0] + "://" + urlArr[1].Replace("//","/"),
-                            AgentClass = jobMetaData.Key.Namespace + "." + jobMetaData.Key.Name+"," + jobMetaData.Key.Assembly.GetName().Name,
-                            BasicUserName = _options.BasicUserName,
-                            BasicPassword = _options.BasicUserPwd,
-                            Cron = "",//自注册的必须手动在去设置
-                            RecurringJobIdentifier = jobId,//唯一id 添加时会check是否已存在
-                            JobName = jobName //如果jobId有值 那么这个就会成为job别名
+                    {
+                        Url = urlArr[0] + "://" + urlArr[1].Replace("//", "/"),
+                        AgentClass = jobMetaData.Key.Namespace + "." + jobMetaData.Key.Name + "," + jobMetaData.Key.Assembly.GetName().Name,
+                        BasicUserName = _options.BasicUserName,
+                        BasicPassword = _options.BasicUserPwd,
+                        Cron = "",//自注册的必须手动在去设置
+                        RecurringJobIdentifier = jobId,//唯一id 添加时会check是否已存在
+                        JobName = jobName //如果jobId有值 那么这个就会成为job别名
                     },
                         new HangfireServerPostOption
                         {
                             BasicUserName = _options.RegisterHangfireBasicName,
                             BasicPassword = _options.RegisterHangfireBasicPwd,
                             ThrowException = false,
-                        });
+                        }).Result;
 
                     var isAlreadyRegisterd = result.ErrMessage != null && result.ErrMessage.Contains("registerd");
                     if (!result.IsSuccess && !isAlreadyRegisterd)
                     {
                         //继续下次重试
                         _logger.LogError(new EventId(1, "Hangfire.HttpJob.AutoRegister"),
-                            $"Failed to register job:{(jobMetaData.Key.Name.Equals(jobName) ? jobName : jobMetaData.Key.Name + "-" + jobName)} to hangfire httpjob server:{_options.RegisterHangfireUrl},err:{result.ErrMessage??string.Empty},retrytimes:{retryTimes}");
+                            $"Failed to register job:{(jobMetaData.Key.Name.Equals(jobName) ? jobName : jobMetaData.Key.Name + "-" + jobName)} to hangfire httpjob server:{_options.RegisterHangfireUrl},err:{result.ErrMessage ?? string.Empty},retrytimes:{retryTimes}");
                         continue;
                     }
 
-                    _logger.LogInformation(new EventId(1, "Hangfire.HttpJob.AutoRegister"), $"【{(jobMetaData.Key.Name.Equals(jobName)? jobName: jobMetaData.Key.Name+"-"+jobName)}】 {(isAlreadyRegisterd ? "already registerd" : "registered")} to HangfireServer:{_options.RegisterHangfireUrl}");
+                    _logger.LogInformation(new EventId(1, "Hangfire.HttpJob.AutoRegister"), $"【{(jobMetaData.Key.Name.Equals(jobName) ? jobName : jobMetaData.Key.Name + "-" + jobName)}】 {(isAlreadyRegisterd ? "already registerd" : "registered")} to HangfireServer:{_options.RegisterHangfireUrl}");
                     jobMetaData.Value.AutoRegisterResult = true;
                 }
 
@@ -143,8 +143,8 @@ namespace Hangfire.HttpJob.Agent
             }
             finally
             {
-                
-                if (retryTimes >=3)
+
+                if (retryTimes >= 3)
                 {
                     _timer.Change(-1, -1);
                     _logger.LogInformation(new EventId(1, "Hangfire.HttpJob.AutoRegister"), "HttpJob End Registered");
@@ -154,7 +154,7 @@ namespace Hangfire.HttpJob.Agent
                     _timer.Change(1000 * 1, 1000 * 1);
                 }
 
-               
+
             }
         }
 
