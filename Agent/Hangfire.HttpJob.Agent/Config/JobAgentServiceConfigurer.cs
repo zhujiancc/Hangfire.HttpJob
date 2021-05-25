@@ -12,7 +12,10 @@ namespace Hangfire.HttpJob.Agent.Config
     public class JobAgentServiceConfigurer
     {
 
-        internal static readonly ConcurrentDictionary<Type, JobMetaData> JobAgentDic = new ConcurrentDictionary<Type, JobMetaData>();
+        /// <summary>
+        /// Type FullName,JobMetaData
+        /// </summary>
+        public static ConcurrentDictionary<Type, JobMetaData> JobAgentDic = new ConcurrentDictionary<Type, JobMetaData>();
 
         public IServiceCollection Services { get; }
 
@@ -26,49 +29,44 @@ namespace Hangfire.HttpJob.Agent.Config
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public JobAgentServiceConfigurer AddJobAgent<T>() where T : JobAgent
+        public JobAgentServiceConfigurer AddOrUpdateJobAgent<T>() where T : JobAgent
         {
             var type = typeof(T);
-            AddJobAgent(type);
+            AddOrUpdateJobAgent(type);
             return this;
         }
 
-        public JobAgentServiceConfigurer AddJobAgent(Type type)
+        public JobAgentServiceConfigurer AddOrUpdateJobAgent(Type type)
         {
             if (!typeof(JobAgent).IsAssignableFrom(type))
             {
-                throw new InvalidCastException($"type:{type.Name} is not AssignableFrom typeOf JobAgent");
-            }
-
-            if (JobAgentDic.ContainsKey(type))
-            {
-                throw new InvalidOperationException($"type:{type.Name} is registerd!");
+                throw new InvalidCastException($"type:{type.FullName} is not AssignableFrom typeOf JobAgent");
             }
 
             //这三种标签不可以共存
             var scopedJobAttribute = type.GetCustomAttribute<TransientJobAttribute>();
             var singletonJobAttribute = type.GetCustomAttribute<SingletonJobAttribute>();//没有它就是默认的
             var hangJobUntilStopAttribute = type.GetCustomAttribute<HangJobUntilStopAttribute>();
-            if(scopedJobAttribute==null && hangJobUntilStopAttribute == null && singletonJobAttribute == null) singletonJobAttribute = new SingletonJobAttribute();
-            var array = new object[] {scopedJobAttribute, singletonJobAttribute, hangJobUntilStopAttribute};
-           
+            if (scopedJobAttribute == null && hangJobUntilStopAttribute == null && singletonJobAttribute == null) singletonJobAttribute = new SingletonJobAttribute();
+            var array = new object[] { scopedJobAttribute, singletonJobAttribute, hangJobUntilStopAttribute };
+
             if (array.Count(r => r != null) > 1)
             {
-                throw new InvalidCastException($"type:{type.Name} can not init with mulit xxxxJobAttribute!");
+                throw new InvalidCastException($"type:{type.FullName} can not init with mulit JobAttribute!");
             }
 
-            if (!(array.FirstOrDefault(r=>r!=null) is JobAttribute regesterMeta))
+            if (!(array.FirstOrDefault(r => r != null) is JobAttribute regesterMeta))
             {
-                throw new InvalidCastException($"type:{type.Name} is not AssignableFrom typeOf JobAttribute");
+                throw new InvalidCastException($"type:{type.FullName} is not AssignableFrom typeOf JobAttribute");
             }
-            
+
             var meta = new JobMetaData
             {
                 RegisterId = regesterMeta.RegisterId,
                 RegisterName = regesterMeta.RegisterName,
-                EnableAutoRegister = regesterMeta.enableAutoRegister
+                EnableAutoRegister = regesterMeta.enableAutoRegister,
             };
-            
+
             if (hangJobUntilStopAttribute != null)
             {
                 meta.Hang = hangJobUntilStopAttribute.On;
@@ -77,30 +75,71 @@ namespace Hangfire.HttpJob.Agent.Config
             if (scopedJobAttribute != null)
             {
                 meta.Transien = true;
-                if (JobAgentDic.TryAdd(type, meta))
+
+                var xx = JobAgentDic.Keys.FirstOrDefault(x => x.FullName == type.FullName);
+                if (xx != null)
                 {
-                    Services.AddTransient(type);
+                    var serviceDescriptor = Services.FirstOrDefault(descriptor => descriptor.ServiceType == xx);
+                    if (serviceDescriptor != null)
+                    {
+                        Services.Remove(serviceDescriptor);
+                    }
+                    JobAgentDic.TryRemove(xx, out var _);
+
+                    if (JobAgentDic.TryAdd(xx, meta))
+                    {
+                        Services.AddTransient(type);
+                    }
+
                 }
+                else
+                {
+                    if (JobAgentDic.TryAdd(type, meta))
+                    {
+                        Services.AddTransient(type);
+                    }
+                }
+
+
                 return this;
             }
-            
+
             meta.Transien = false;
-            if (JobAgentDic.TryAdd(type, meta))
+            var oldType = JobAgentDic.Keys.FirstOrDefault(x => x.FullName == type.FullName);
+            if (oldType != null)
             {
-                Services.AddSingleton(type);
+                var serviceDescriptor = Services.FirstOrDefault(descriptor => descriptor.ServiceType == oldType);
+                if (serviceDescriptor != null)
+                {
+                    Services.Remove(serviceDescriptor);
+                }
+                JobAgentDic.TryRemove(oldType, out var _);
+
+                if (JobAgentDic.TryAdd(oldType, meta))
+                {
+                    Services.AddSingleton(type);
+                }
             }
+            else
+            {
+                if (JobAgentDic.TryAdd(type, meta))
+                {
+                    Services.AddSingleton(type);
+                }
+            }
+
             return this;
         }
 
-        public JobAgentServiceConfigurer AddJobAgent(Assembly assembly) 
+        public JobAgentServiceConfigurer AddJobAgent(Assembly assembly)
         {
             var types = assembly.GetExportedTypes();
             var agengList = (from t in types
-                where typeof(JobAgent).IsAssignableFrom(t) &&
-                      !t.IsAbstract &&
-                      !t.IsInterface
-                select t).ToList();
-            agengList.ForEach(r=>AddJobAgent(r));
+                             where typeof(JobAgent).IsAssignableFrom(t) &&
+                                   !t.IsAbstract &&
+                                   !t.IsInterface
+                             select t).ToList();
+            agengList.ForEach(r => AddOrUpdateJobAgent(r));
             return this;
         }
     }

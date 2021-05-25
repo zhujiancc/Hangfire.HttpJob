@@ -4,11 +4,11 @@ using System.Text;
 
 namespace Hangfire.HttpJob.Agent.Config
 {
-    internal class JobMetaData
+    public class JobMetaData
     {
         public bool Transien { get; set; }
         public bool Hang { get; set; }
-        
+
         public string RegisterName { get; set; }
         public string RegisterId { get; set; }
         public bool? EnableAutoRegister { get; set; }
